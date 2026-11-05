@@ -1,6 +1,6 @@
 # Wellfound Auto-Apply (Resume-Aware)
 
-A browser-console script that auto-applies to jobs on [Wellfound](https://wellfound.com) using a resume-aware application note. Built for **Venkatesh Suravarapu**.
+A browser-console script that auto-applies to jobs on [Wellfound](https://wellfound.com) using a resume-aware application note. Built for **Venkatesh S**.
 
 ## What it does
 
@@ -37,7 +37,7 @@ The application notes (`NOTE_AI`, `NOTE_FULLSTACK`) and the resume keyword lists
 
 ```js
 /**
- * Wellfound Auto-Apply (resume-aware) — Venkatesh Suravarapu
+ * Wellfound Auto-Apply (resume-aware) — Venkatesh S
  * Run inside Chrome DevTools Console on a Wellfound jobs listing page.
  *
  * Changes vs. the original:
@@ -67,7 +67,7 @@ Live project: https://growman.live`;
 
   const NOTE_AI = `Hi there,
 
-I'm Venkatesh, a Software Engineer focused on building production GenAI and backend systems. I'm currently working on AI/LLM features at Find Me LLC (remote, New York) using Python, FastAPI, LangChain, AWS Bedrock, RAG / Hybrid RAG and agentic workflows, with Langfuse for tracing and evaluation.
+I'm Venkatesh S, a Software Engineer focused on building production GenAI and backend systems. I'm currently working on AI/LLM features at Find Me LLC (remote, New York) using Python, FastAPI, LangChain, AWS Bedrock, RAG / Hybrid RAG and agentic workflows, with Langfuse for tracing and evaluation.
 
 • Built RAG and Hybrid RAG pipelines combining semantic retrieval with traditional search
 • Built agentic workflows for tool integration and multi-step automation
@@ -80,11 +80,11 @@ ${LINKS}
 Happy to share more detail on any of this. Looking forward to hearing from you!
 
 Best,
-Venkatesh`;
+Venkatesh S`;
 
   const NOTE_FULLSTACK = `Hi there,
 
-I'm Venkatesh, a Software Engineer with experience across backend, full-stack and cloud. At Find Me LLC (remote, New York) I build FastAPI/Python services backed by PostgreSQL and Redis, React frontends, and the CI/CD and infrastructure around them.
+I'm Venkatesh S, a Software Engineer with experience across backend, full-stack and cloud. At Find Me LLC (remote, New York) I build FastAPI/Python services backed by PostgreSQL and Redis, React frontends, and the CI/CD and infrastructure around them.
 
 • Python/FastAPI, Node.js/Express REST APIs; React, Next.js, React Native, Tailwind
 • Docker, AWS (EC2/ECS), Terraform, GitHub Actions; Prometheus/Grafana monitoring
@@ -96,7 +96,7 @@ ${LINKS}
 Hope this fits the role. Looking forward to hearing from you!
 
 Best,
-Venkatesh`;
+Venkatesh S`;
 
   // ───────────────────────── RESUME PROFILE ─────────────────────────
   const AI_KEYWORDS = ['llm', 'genai', 'gen ai', 'generative', 'rag', 'langchain', 'agentic', 'agent', 'bedrock', 'prompt', 'ai engineer', 'machine learning', 'nlp'];
