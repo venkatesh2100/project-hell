@@ -6,7 +6,7 @@ A browser-console script that auto-applies to jobs on [Wellfound](https://wellfo
 
 - Opens every job card on the listing page and fills the application note.
 - Applies to every job — no skill-match, title or experience filtering.
-- Selects **India** as the current location when the application form asks for one (best effort — missing the field does not skip the job).
+- Selects **Hyderabad** as the current location in Wellfound's Downshift combobox (best effort — a missing field does not skip the job).
 - Picks one of two notes per job — an AI/GenAI-focused note or a backend/full-stack note — based on keywords in the job description.
 - Answers custom radio questions from the question text plus the resume profile (Yes / Intermediate for skills on the resume, No / Beginner for ones that are not).
 - Fills the remaining react-select and native dropdowns with preferred options (Remote, Python).
@@ -29,7 +29,7 @@ Edit the `CONFIG` object at the top of the script:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `location` | `India` | Value typed into the location dropdown when the form asks for a current location. |
+| `location` | `Hyderabad` | City typed into Wellfound's Downshift location combobox. |
 | `maxScrolls` | `10` | How many scroll attempts to make when no new jobs are found. |
 
 The application notes (`NOTE_AI`, `NOTE_FULLSTACK`) and the resume keyword lists (`AI_KEYWORDS`, `ON_RESUME`, `NOT_ON_RESUME`) are plain constants — update them if your resume changes.
@@ -43,7 +43,7 @@ The application notes (`NOTE_AI`, `NOTE_FULLSTACK`) and the resume keyword lists
  *
  * Changes vs. the original:
  *  - Applies to EVERY job: no skill-match, title or experience filtering
- *  - Selects India as the current location when the form asks for one
+ *  - Selects Hyderabad (India) as the current location in Wellfound's Downshift combobox
  *  - Application note rewritten from your resume (AI-focused or backend/full-stack variant per job)
  *  - Custom radio questions are answered from the question text + your resume
  *    (Yes / Intermediate for your skills, No / Beginner for ones not on your resume)
@@ -55,7 +55,7 @@ The application notes (`NOTE_AI`, `NOTE_FULLSTACK`) and the resume keyword lists
 
   // ───────────────────────── CONFIG ─────────────────────────
   const CONFIG = {
-    location: 'India',
+    location: 'Hyderabad',
     maxScrolls: 10,
   };
 
@@ -155,94 +155,72 @@ Venkatesh S`;
       control.parentElement?.parentElement?.innerText,
     ].join(' ').toLowerCase();
 
-    return /location|country|based in|current location|where.*live|where.*located/.test(context);
+    return /location|country|city|based in|current location|where.*live|where.*located/.test(context);
   };
 
-  const selectIndiaReact = async (control) => {
-    const input = control.querySelector('input');
-    if (!input) return false;
+  // Wellfound's location field is a Downshift combobox (not react-select).
+  const handleLocationDropdown = async () => {
+    const root = getRoot();
+    const query = CONFIG.location;
 
-    const selected = control.querySelector('[class*="single-value"]');
-    if (selected?.innerText.trim().toLowerCase() === CONFIG.location.toLowerCase()) {
-      console.log('%c✅ India already selected', 'color: green');
-      return true;
+    const inputs = [...root.querySelectorAll('input[type="text"], input:not([type])')];
+    const input =
+      inputs.find((el) =>
+        /location|city|san francisco|where.*based/i.test(
+          `${el.placeholder || ''} ${el.getAttribute('aria-label') || ''}`
+        )
+      ) ||
+      root.querySelector('#downshift-0-input') ||
+      root.querySelector('input[id^="downshift-"][id$="-input"]');
+
+    if (!input) {
+      console.log('%c⚠️ Location input not found', 'color: gray');
+      return false;
     }
 
-    control.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    input.scrollIntoView({ block: 'center', behavior: 'smooth' });
     await delay(300);
     input.focus();
 
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-    setter.call(input, CONFIG.location);
+    setter.call(input, query);
     input.dispatchEvent(new Event('input', { bubbles: true }));
     await delay(1000);
 
-    const menu = document.querySelector('[class*="select__menu"]');
-    if (!menu) {
-      console.log('%c❌ India dropdown suggestions not found', 'color: red');
+    // Downshift suggestions (poll until they render)
+    const getOptions = () =>
+      [...document.querySelectorAll('[role="option"], [id^="downshift-"][id$="-item"]')]
+        .filter((el) => el.offsetParent !== null);
+
+    let options = [];
+    const start = Date.now();
+    while (Date.now() - start < 2500) {
+      options = getOptions();
+      if (options.length) break;
+      await delay(200);
+    }
+
+    console.log('%c📍 Location suggestions:', 'color: gray', options.map((o) => o.innerText.trim()));
+
+    const match = options.find((o) => lower(o.innerText).includes(lower(query)));
+    if (!match) {
+      console.log(`%c❌ ${query} suggestion not found`, 'color: red');
       return false;
     }
 
-    const options = [...menu.querySelectorAll('[class*="select__option"]')];
-    const india = options.find(
-      (option) =>
-        option.innerText.trim().toLowerCase() === CONFIG.location.toLowerCase() &&
-        option.getAttribute('aria-disabled') !== 'true'
-    );
+    match.click();
+    await delay(1000);
 
-    if (!india) {
-      console.log('%c❌ Exact India option not found', 'color: red');
-      return false;
-    }
+    // Downshift sometimes clears the input after selection; check the combobox text too.
+    const combobox = input.closest('[role="combobox"]') || input.parentElement;
+    const selectedText = `${input.value} ${combobox?.innerText || ''}`;
 
-    india.click();
-    await delay(800);
-
-    const verified = control.querySelector('[class*="single-value"]');
-    if (verified?.innerText.trim().toLowerCase() === CONFIG.location.toLowerCase()) {
-      console.log('%c✅ Location selected: India', 'color: green');
+    if (lower(selectedText).includes(lower(query))) {
+      console.log(`%c✅ Location selected: ${query}`, 'color: green');
       return true;
     }
 
-    return false;
-  };
-
-  const handleLocationDropdown = async () => {
-    const root = getRoot();
-
-    // First look for a React Select location field.
-    const controls = [...root.querySelectorAll('[class*="select__control"]')];
-    const control = controls.find(isLocationControl);
-    if (control) return await selectIndiaReact(control);
-
-    // Fallback: native select with a location label.
-    const nativeSelects = [...root.querySelectorAll('select:not([disabled])')];
-    for (const sel of nativeSelects) {
-      const context = [
-        sel.name,
-        sel.id,
-        sel.getAttribute('aria-label'),
-        sel.parentElement?.innerText,
-        sel.parentElement?.parentElement?.innerText,
-      ].join(' ').toLowerCase();
-
-      if (!/location|country|based in/.test(context)) continue;
-
-      const option = [...sel.options].find((o) => o.text.trim().toLowerCase() === CONFIG.location.toLowerCase());
-      if (!option) continue;
-
-      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
-      setter.call(sel, option.value);
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-      await delay(700);
-
-      if (sel.value === option.value) {
-        console.log('%c✅ Native location selected: India', 'color: green');
-        return true;
-      }
-    }
-
-    console.log('%c⚠️ Could not identify a location dropdown', 'color: gray');
+    console.log('%c⚠️ Location selection needs verification:', 'color: orange', input.value);
     return false;
   };
 
@@ -395,9 +373,9 @@ Venkatesh S`;
       const jobText = getJobText(applyBtn, learnMoreBtn);
       const title = jobText.split('\n').find((l) => l.trim())?.trim().slice(0, 60) || 'unknown job';
 
-      // 1) Select India first (best effort — keep going if the form has no location field)
+      // 1) Select Hyderabad first (best effort — keep going if the form has no location field)
       const locationSelected = await handleLocationDropdown();
-      if (!locationSelected) console.log('%c⚠️ India not selected; continuing anyway', 'color: gray');
+      if (!locationSelected) console.log(`%c⚠️ ${CONFIG.location} not selected; continuing anyway`, 'color: gray');
       await delay(700);
 
       // 2) Fill the application note — Apply is usually disabled until it has text
