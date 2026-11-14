@@ -1,13 +1,15 @@
-# Wellfound Auto-Apply (Resume-Aware)
+# Wellfound Auto-Apply (India)
 
 A browser-console script that auto-applies to jobs on [Wellfound](https://wellfound.com) using a resume-aware application note. Built for **Venkatesh S**.
 
 ## What it does
 
 - Opens every job card on the listing page and fills the application note.
+- Applies to every job — no skill-match, title or experience filtering.
+- Selects **India** as the current location when the application form asks for one (best effort — missing the field does not skip the job).
 - Picks one of two notes per job — an AI/GenAI-focused note or a backend/full-stack note — based on keywords in the job description.
 - Answers custom radio questions from the question text plus the resume profile (Yes / Intermediate for skills on the resume, No / Beginner for ones that are not).
-- Fills react-select and native dropdowns with preferred options (Hyderabad, India, Remote, Python).
+- Fills the remaining react-select and native dropdowns with preferred options (Remote, Python).
 - Handles the relocation questionnaire when the Apply button stays disabled.
 - Skips a job only when Apply is still disabled after all answers are filled.
 - Scrolls to load more jobs, up to the configured limit, then prints a summary table.
@@ -27,25 +29,24 @@ Edit the `CONFIG` object at the top of the script:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `maxJobExperience` | `3` | Skip jobs whose minimum required years exceed this. |
-| `minMatchScore` | `2` | Minimum number of resume keywords a job must mention. |
+| `location` | `India` | Value typed into the location dropdown when the form asks for a current location. |
 | `maxScrolls` | `10` | How many scroll attempts to make when no new jobs are found. |
 
-The application notes (`NOTE_AI`, `NOTE_FULLSTACK`) and the resume keyword lists (`ON_RESUME`, `NOT_ON_RESUME`, `MATCH_KEYWORDS`) are plain constants — update them if your resume changes.
+The application notes (`NOTE_AI`, `NOTE_FULLSTACK`) and the resume keyword lists (`AI_KEYWORDS`, `ON_RESUME`, `NOT_ON_RESUME`) are plain constants — update them if your resume changes.
 
 ## Script
 
 ```js
 /**
- * Wellfound Auto-Apply (resume-aware) — Venkatesh S
+ * Wellfound Auto-Apply (India) — Venkatesh S
  * Run inside Chrome DevTools Console on a Wellfound jobs listing page.
  *
  * Changes vs. the original:
+ *  - Applies to EVERY job: no skill-match, title or experience filtering
+ *  - Selects India as the current location when the form asks for one
  *  - Application note rewritten from your resume (AI-focused or backend/full-stack variant per job)
- *  - Applies to EVERY job (no relevance filter, nothing is skipped on purpose)
  *  - Custom radio questions are answered from the question text + your resume
- *    (Yes / Intermediate for your skills, No / Beginner for ones not on your resume;
- *    anything unclear falls back to the original behaviour)
+ *    (Yes / Intermediate for your skills, No / Beginner for ones not on your resume)
  *  - Relocation questionnaire handler kept from the original script
  *  - Only skips if Apply is still disabled after answering, since it can't be clicked
  */
@@ -54,8 +55,7 @@ The application notes (`NOTE_AI`, `NOTE_FULLSTACK`) and the resume keyword lists
 
   // ───────────────────────── CONFIG ─────────────────────────
   const CONFIG = {
-    maxJobExperience: 3,   // skip jobs whose minimum required years > this
-    minMatchScore: 2,      // min resume keywords a job must mention
+    location: 'India',
     maxScrolls: 10,
   };
 
@@ -100,17 +100,6 @@ Venkatesh S`;
 
   // ───────────────────────── RESUME PROFILE ─────────────────────────
   const AI_KEYWORDS = ['llm', 'genai', 'gen ai', 'generative', 'rag', 'langchain', 'agentic', 'agent', 'bedrock', 'prompt', 'ai engineer', 'machine learning', 'nlp'];
-  const MATCH_KEYWORDS = [
-    ...AI_KEYWORDS, 'python', 'fastapi', 'langfuse', 'backend', 'back-end', 'back end', 'full stack', 'full-stack', 'fullstack',
-    'software engineer', 'software developer', 'react', 'next.js', 'nextjs', 'react native', 'node', 'express', 'typescript',
-    'javascript', 'postgres', 'redis', 'rest api', 'api', 'aws', 'docker', 'terraform', 'ci/cd', 'github actions',
-    'prometheus', 'grafana', 'playwright', 'microservices',
-  ];
-  const EXCLUDE_TITLE = [
-    'senior', 'sr.', 'sr ', 'lead', 'principal', 'staff', 'architect', 'manager', 'director', 'head of', 'vp ',
-    'founding', 'cto', '.net', 'c#', 'php', 'salesforce', 'angular', 'ios', 'swift', 'kotlin', 'flutter', 'golang',
-    'ruby', 'rails', 'wordpress', 'devops', 'qa ', 'sdet', 'data engineer', 'embedded', 'designer', 'marketing', 'sales',
-  ];
   const NOT_ON_RESUME = ['java ', 'java,', 'java?', 'kubernetes', 'k8s', '.net', 'c#', 'php', 'angular', 'golang', 'ruby', 'scala', 'kotlin', 'swift', 'flutter', 'spark', 'hadoop', 'azure', 'gcp', 'django', 'flask', 'mongodb', 'solidity', 'web3'];
   const ON_RESUME = ['python', 'fastapi', 'langchain', 'rag', 'llm', 'bedrock', 'react', 'next', 'node', 'express', 'typescript', 'javascript', 'postgres', 'redis', 'docker', 'aws', 'terraform', 'github actions', 'ci/cd', 'rest', 'api', 'playwright', 'prometheus', 'grafana', 'tailwind', 'html', 'css', 'sql', 'linux', 'git'];
 
@@ -121,10 +110,12 @@ Venkatesh S`;
   const processedButtons = new Set();
   const log = [];
 
-  console.log('%c🚀 Starting resume-aware auto-apply on Wellfound...', 'color: green; font-weight: bold;');
+  console.log('%c🚀 Starting Wellfound India auto-apply (all jobs)...', 'color: green; font-weight: bold;');
 
   // ───────────────────────── HELPERS ─────────────────────────
   const lower = (s) => (s || '').toLowerCase();
+
+  const getRoot = () => document.querySelector('[role="dialog"], [data-test*="SlideIn"]') || document;
 
   const waitForElement = async (selector, timeout = 5000) => {
     const start = Date.now();
@@ -151,24 +142,112 @@ Venkatesh S`;
     return lower(el.innerText);
   };
 
-  const evaluateJob = (text) => {
-    const head = text.slice(0, 200); // title/header area
-    const bad = EXCLUDE_TITLE.find((k) => head.includes(k));
-    if (bad) return { apply: false, reason: `header contains "${bad}"` };
+  // ───────────────────────── LOCATION ─────────────────────────
+  const isLocationControl = (control) => {
+    const input = control.querySelector('input');
+    const context = [
+      input?.getAttribute('placeholder'),
+      input?.getAttribute('aria-label'),
+      input?.getAttribute('name'),
+      input?.id,
+      control.getAttribute('aria-label'),
+      control.parentElement?.innerText,
+      control.parentElement?.parentElement?.innerText,
+    ].join(' ').toLowerCase();
 
-    const years = [...text.matchAll(/(\d+)\s*\+?\s*(?:-\s*\d+\s*)?(?:years?|yrs?)/g)].map((m) => +m[1]);
-    const minExp = years.length ? Math.min(...years) : 0;
-    if (minExp > CONFIG.maxJobExperience) return { apply: false, reason: `needs ${minExp}+ yrs` };
-
-    const score = MATCH_KEYWORDS.filter((k) => text.includes(k)).length;
-    if (score < CONFIG.minMatchScore) return { apply: false, reason: `low skill match (${score})` };
-
-    return { apply: true, reason: `match score ${score}` };
+    return /location|country|based in|current location|where.*live|where.*located/.test(context);
   };
 
-  // Answer custom radio questions from the question text. Returns unanswerable question snippets.
+  const selectIndiaReact = async (control) => {
+    const input = control.querySelector('input');
+    if (!input) return false;
+
+    const selected = control.querySelector('[class*="single-value"]');
+    if (selected?.innerText.trim().toLowerCase() === CONFIG.location.toLowerCase()) {
+      console.log('%c✅ India already selected', 'color: green');
+      return true;
+    }
+
+    control.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    await delay(300);
+    input.focus();
+
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(input, CONFIG.location);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await delay(1000);
+
+    const menu = document.querySelector('[class*="select__menu"]');
+    if (!menu) {
+      console.log('%c❌ India dropdown suggestions not found', 'color: red');
+      return false;
+    }
+
+    const options = [...menu.querySelectorAll('[class*="select__option"]')];
+    const india = options.find(
+      (option) =>
+        option.innerText.trim().toLowerCase() === CONFIG.location.toLowerCase() &&
+        option.getAttribute('aria-disabled') !== 'true'
+    );
+
+    if (!india) {
+      console.log('%c❌ Exact India option not found', 'color: red');
+      return false;
+    }
+
+    india.click();
+    await delay(800);
+
+    const verified = control.querySelector('[class*="single-value"]');
+    if (verified?.innerText.trim().toLowerCase() === CONFIG.location.toLowerCase()) {
+      console.log('%c✅ Location selected: India', 'color: green');
+      return true;
+    }
+
+    return false;
+  };
+
+  const handleLocationDropdown = async () => {
+    const root = getRoot();
+
+    // First look for a React Select location field.
+    const controls = [...root.querySelectorAll('[class*="select__control"]')];
+    const control = controls.find(isLocationControl);
+    if (control) return await selectIndiaReact(control);
+
+    // Fallback: native select with a location label.
+    const nativeSelects = [...root.querySelectorAll('select:not([disabled])')];
+    for (const sel of nativeSelects) {
+      const context = [
+        sel.name,
+        sel.id,
+        sel.getAttribute('aria-label'),
+        sel.parentElement?.innerText,
+        sel.parentElement?.parentElement?.innerText,
+      ].join(' ').toLowerCase();
+
+      if (!/location|country|based in/.test(context)) continue;
+
+      const option = [...sel.options].find((o) => o.text.trim().toLowerCase() === CONFIG.location.toLowerCase());
+      if (!option) continue;
+
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+      setter.call(sel, option.value);
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      await delay(700);
+
+      if (sel.value === option.value) {
+        console.log('%c✅ Native location selected: India', 'color: green');
+        return true;
+      }
+    }
+
+    console.log('%c⚠️ Could not identify a location dropdown', 'color: gray');
+    return false;
+  };
+
+  // ───────────────────────── CUSTOM QUESTIONS ─────────────────────────
   const handleCustomQuestions = () => {
-    const unresolved = [];
     document.querySelectorAll('[data-test^="RadioGroup-customQuestionAnswers"]').forEach((group) => {
       const radios = [...group.querySelectorAll('input[type="radio"]')];
       const labelOf = (r) => lower(r.closest('label')?.innerText || r.parentElement?.innerText || r.value);
@@ -182,26 +261,27 @@ Venkatesh S`;
       const yes = find(/^\s*yes\b/);
       const no = find(/^\s*no\b/);
       if (yes && no) {
-        return (knownMissing ? no : yes).click();
+        (knownMissing ? no : yes).click();
+        return;
       }
 
       // Skill-level scales (beginner / intermediate / advanced / expert ...)
       const beginner = find(/beginner|basic|novice|entry/);
       const intermediate = find(/intermediate|moderate|proficient|working/);
       if (beginner || intermediate) {
-        if (knownMissing && beginner) return beginner.click();
-        return (intermediate || beginner).click();
+        if (knownMissing && beginner) beginner.click();
+        else (intermediate || beginner).click();
+        return;
       }
 
-      // Anything else: middle option for 3, first option otherwise (same as the original script)
-      if (radios.length) (radios.length === 3 ? radios[1] : radios[0]).click();
+      // Avoid guessing answers to unknown questions.
+      console.log('%c⚠️ Unrecognized custom question:', 'color: gray', question.slice(0, 120));
     });
-    return unresolved;
   };
 
-  // ── Dropdown handling (react-select + native <select>) ──
+  // ───────────────────────── DROPDOWNS ─────────────────────────
   // Preferred option text when a list is shown (first match wins), else the first option is used
-  const PREFERRED_OPTIONS = ['hyderabad', 'india', 'remote', 'python'];
+  const PREFERRED_OPTIONS = ['remote', 'python'];
 
   const openSelect = async (control) => {
     control.scrollIntoView({ block: 'center' });
@@ -223,15 +303,21 @@ Venkatesh S`;
   };
 
   const handleDropdowns = async () => {
-    const root = document.querySelector('[role="dialog"], [data-test*="SlideIn"]') || document;
+    const root = getRoot();
     let filled = 0;
 
     for (const control of [...root.querySelectorAll('[class*="select__control"]')]) {
       // already has a value? leave it
       if (control.querySelector('[class*="single-value"], [class*="multi-value"]')) continue;
 
+      // never overwrite the location selection
+      if (isLocationControl(control)) continue;
+
       const menu = await openSelect(control);
-      if (!menu) { console.log('%c⚠️ Could not open a dropdown', 'color: gray'); continue; }
+      if (!menu) {
+        console.log('%c⚠️ Could not open a dropdown', 'color: gray');
+        continue;
+      }
 
       const options = [...menu.querySelectorAll('[class*="select__option"]')]
         .filter((o) => !/no options|loading/i.test(o.innerText) && o.getAttribute('aria-disabled') !== 'true');
@@ -248,7 +334,7 @@ Venkatesh S`;
       await delay(600);
     }
 
-    // native <select> elements
+    // native <select> elements (skip the location one, handled above)
     root.querySelectorAll('select:not([disabled])').forEach((sel) => {
       if (sel.value) return;
       const opt = [...sel.options].find((o) => o.value && !o.disabled);
@@ -309,11 +395,16 @@ Venkatesh S`;
       const jobText = getJobText(applyBtn, learnMoreBtn);
       const title = jobText.split('\n').find((l) => l.trim())?.trim().slice(0, 60) || 'unknown job';
 
-      // 1) Fill the application note FIRST — Apply is usually disabled until it has text
+      // 1) Select India first (best effort — keep going if the form has no location field)
+      const locationSelected = await handleLocationDropdown();
+      if (!locationSelected) console.log('%c⚠️ India not selected; continuing anyway', 'color: gray');
+      await delay(700);
+
+      // 2) Fill the application note — Apply is usually disabled until it has text
       const aiHits = AI_KEYWORDS.filter((k) => jobText.includes(k)).length;
       const note = aiHits >= 2 ? NOTE_AI : NOTE_FULLSTACK;
       const fillNote = () => {
-        const textarea = document.querySelector('textarea:not([disabled])');
+        const textarea = getRoot().querySelector('textarea:not([disabled])');
         if (!textarea) return false;
         const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
         setter.call(textarea, note);
@@ -323,46 +414,58 @@ Venkatesh S`;
         return true;
       };
       if (fillNote()) console.log(`%c📝 Filled ${aiHits >= 2 ? 'AI' : 'full-stack'} note`, 'color: purple');
-      await delay(500);
+      else console.log('%c⚠️ Application textarea not found', 'color: gray');
+      await delay(700);
 
-      // 2) Answer custom questions, then any dropdowns in the modal
+      // 3) Answer custom questions, then any remaining dropdowns in the modal
       handleCustomQuestions();
-      await delay(800);
+      await delay(700);
       await handleDropdowns();
       await delay(500);
 
-      // 3) Wait up to ~3s for Apply to enable (re-query: React may re-render the button)
+      // 4) Wait up to ~3s for Apply to enable (re-query: React may re-render the button)
       const getBtn = () => document.querySelector('button[data-test="JobDescriptionSlideIn--SubmitButton"]');
       const waitEnabled = async (ms = 3000) => {
         const t = Date.now();
         while (Date.now() - t < ms) {
-          if (getBtn() && !getBtn().disabled) return true;
+          const btn = getBtn();
+          if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') return true;
           await delay(200);
         }
         return false;
       };
       let enabled = await waitEnabled();
 
-      // 4) Still disabled? Try the relocation questionnaire, re-fill note, wait again
+      // 5) Still disabled? Try the relocation questionnaire, re-fill the note, wait again
       if (!enabled) {
-        await handleRelocationQuestion();
+        console.log('%c⚠️ Apply disabled. Retrying location and message...', 'color: orange');
+        await handleLocationDropdown();
         fillNote();
+        handleCustomQuestions();
         await delay(500);
         enabled = await waitEnabled();
       }
 
-      // 5) Last resort: report exactly what is blocking it, then skip (a disabled button can't be clicked)
+      // 6) Last resort: report exactly what is blocking it, then skip (a disabled button can't be clicked)
       if (!enabled) {
-        const blockers = [...document.querySelectorAll('textarea, input[required], [aria-required="true"]')]
+        const blockers = [...getRoot().querySelectorAll('textarea, input[required], select[required], [aria-required="true"]')]
           .filter((el) => !el.disabled && !el.value && el.type !== 'radio')
-          .map((el) => el.getAttribute('name') || el.getAttribute('placeholder') || el.tagName);
+          .map((el) => el.getAttribute('name') || el.getAttribute('placeholder') || el.getAttribute('aria-label') || el.tagName);
         console.log('%c🔎 Empty fields that may block Apply:', 'color: gray', blockers);
         await skip('apply button still disabled', title);
         continue;
       }
 
+      // 7) Apply
       await delay(500);
-      getBtn().click();
+      const finalBtn = getBtn();
+      if (!finalBtn || finalBtn.disabled || finalBtn.getAttribute('aria-disabled') === 'true') {
+        await skip('apply became disabled before clicking', title);
+        continue;
+      }
+
+      finalBtn.click();
+      console.log('%c📨 Apply clicked. Waiting for response...', 'color: blue');
       await delay(3000);
       appliedCount++;
       log.push({ job: title, result: 'applied', reason: '' });
